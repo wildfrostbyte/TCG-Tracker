@@ -192,11 +192,11 @@ function build(ctx, view, set, route) {
 
   function drawGrid() {
     const cards = set.cards.filter(visible);
-    // classList, not className, so a running celebrate wave isn't cut short.
+    // classList, so a running celebrate wave survives.
     grid.classList.toggle('grid', !s.binder);
     grid.classList.toggle('binder', !!s.binder);
     if (s.binder) {
-      // Pages only change with the pocket size; filters and search just re-dim the tiles.
+      // Rebuild pages only when the size changes; filters just re-dim.
       if (pagesFor !== s.binder) grid.replaceChildren(...binderPages());
       pagesFor = s.binder;
       const shown = new Set(cards.map((c) => c[0]));
@@ -205,7 +205,7 @@ function build(ctx, view, set, route) {
       pagesFor = null;
       grid.replaceChildren(...cards.map(tile));
     }
-    // Binder pages stay on screen when nothing matches, so the note goes above them.
+    // Binder pages stay when nothing matches, so the note goes above them.
     if (s.binder) grid.before(empty);
     else grid.after(empty);
     empty.hidden = cards.length > 0;
@@ -216,9 +216,8 @@ function build(ctx, view, set, route) {
     }
   }
 
-  // Every card keeps its pocket so the pages match the binder: filters dim cards instead of
-  // removing them (drawGrid), and the last page is padded with empty pockets.
-  let pagesFor = null; // the BINDER_SIZES entry the pages in the grid were built for
+  // Each card keeps its pocket (filters dim, never remove); the last page is padded.
+  let pagesFor = null; // the size the current pages were built for
   function binderPages() {
     const { pockets, cols } = s.binder;
     const pages = [];
@@ -274,7 +273,11 @@ function build(ctx, view, set, route) {
     const n = mine(card[0]);
     if (btn.dataset.action === 'inc') setCount(set.id, card[0], n + 1);
     else if (btn.dataset.action === 'dec') setCount(set.id, card[0], n - 1);
-    else if (btn.dataset.action === 'open') openCardSheet(ctx, set, card);
+    else if (btn.dataset.action === 'open') {
+      // Previous / next step through the cards on screen (undimmed in binder view).
+      const onScreen = [...grid.querySelectorAll('.tile:not(.dim)')].map((el) => byId.get(el.dataset.card));
+      openCardSheet(ctx, set, card, { cards: onScreen });
+    }
   });
 
   chipBox.addEventListener('click', (e) => {
@@ -292,13 +295,13 @@ function build(ctx, view, set, route) {
   search.addEventListener('input', () => {
     s.q = search.value.trim();
     drawGrid();
-    // Binder pages keep every card, so bring the first match into view.
+    // Binder keeps every card: scroll to the first match.
     if (s.binder) {
       if (!s.q) return;
       const match = grid.querySelector('.tile:not(.dim)');
       if (match) return match.scrollIntoView({ block: 'center' });
     }
-    // Scrolled deep into a big set, the matches (or the binder's "no match" note) would be off screen above.
+    // Otherwise scroll up if the results (or binder's no-match note) are above the screen.
     const top = (s.binder ? empty : grid).getBoundingClientRect().top + scrollY - view.querySelector('.top').offsetHeight;
     if (scrollY > top) scrollTo(0, top);
   });

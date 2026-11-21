@@ -142,7 +142,7 @@ export function chips(items, { label } = {}) {
   );
 }
 
-// Pick one of a few options (Home tabs, Appearance, set view). `label` may be text or nodes.
+// One-of-a-few picker. Option labels may be text or nodes.
 export function segmented({ label, options, current, onChange, className }) {
   const group = h('div', { class: className ? `segmented ${className}` : 'segmented', role: 'group', 'aria-label': label },
     options.map((o) => h('button', { type: 'button', 'aria-pressed': String(o.id === current), 'aria-label': o.ariaLabel }, o.label)));

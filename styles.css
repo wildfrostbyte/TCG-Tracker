@@ -193,7 +193,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .segmented { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: var(--surface-2); }
 .segmented button { flex: 1; height: 38px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 600; }
 .segmented button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
-/* Two lines per option: a big value over a small caption. */
+/* Value over caption. */
 .segmented.tall button { height: auto; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
 .segmented.tall b { font-size: 18px; }
 
@@ -406,28 +406,28 @@ body:has(.findbar) #toast { bottom: calc(80px + var(--safe-bottom)); }
   background: var(--accent);
   color: var(--accent-text);
 }
-/* Binder view: one card-shaped pocket per card, pages in set order. Two pages side by side on wide screens. */
+/* Binder view: card-shaped pockets, pages in set order. */
 .binder { display: grid; gap: 16px; padding: 12px var(--gutter); }
 .binder-page {
   width: 100%;
-  max-width: calc(var(--cols) * 150px + 18px); /* keeps 4-pocket pages from ballooning */
+  max-width: calc(var(--cols) * 150px + 18px); /* stops 4-pocket pages ballooning */
   justify-self: center;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
-  /* Skip drawing pages that are off screen (the pocket tiles can't, see below). */
+  /* Skip drawing off-screen pages (tiles can't, see below). */
   content-visibility: auto;
   contain-intrinsic-size: auto 520px;
 }
 .page-label { display: flex; justify-content: space-between; gap: 8px; margin: 0 2px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .pockets { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 6px; }
-/* Card-shaped; the tile's own intrinsic-size placeholder would fight the aspect ratio. */
+/* The tile's intrinsic-size placeholder would fight the aspect ratio. */
 .pockets .tile { aspect-ratio: 63 / 88; content-visibility: visible; }
 .pockets .tile-main { flex: 1; min-width: 0; }
 .pocket-empty { aspect-ratio: 63 / 88; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
 .tile.dim { opacity: 0.3; }
-/* Four across on a phone: shrink the number so "141/103" still fits, and drop the rarity pill. */
+/* 4 across on phones: smaller numbers, no rarity pill. */
 @media (max-width: 480px) {
   .binder-page[data-cols="4"] .tile-main { padding: 6px; }
   .binder-page[data-cols="4"] .tile-num b { font-size: 16px; }
@@ -579,6 +579,15 @@ textarea { resize: vertical; width: 100%; }
 .card-sheet .sheet-head { width: 100%; align-items: center; }
 .set-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); font-size: 13px; font-weight: 600; }
 .set-chip b { padding: 2px 8px; border-radius: 999px; background: var(--dark); color: var(--dark-text); font-size: 11px; letter-spacing: 0.04em; }
+.card-sheet .set-chip { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.card-position { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Picture between previous / next arrows. */
+.card-stage { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+.card-step { background: transparent; }
+.card-step:disabled { opacity: 0.3; cursor: default; }
+.card-picture { display: flex; touch-action: pan-y; } /* vertical scroll only; sideways is swipe */
+.card-stage:has(.card-step) .card-image { width: min(240px, calc(100vw - 150px)); } /* fit both arrows on small phones */
+.card-details { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
 .card-image { width: min(240px, 62vw); aspect-ratio: 63 / 88; border-radius: 12px; object-fit: cover; background: var(--surface-2); }
 .card-image.placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 2px dashed var(--border-strong); color: var(--muted); font-size: 13px; text-align: center; padding: 16px; }
 .card-title { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 4px 10px; text-align: center; }
@@ -629,7 +638,7 @@ textarea { resize: vertical; width: 100%; }
 @media (min-width: 700px) {
   :root { --gutter: 24px; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
-  /* Open-binder spreads: page 1 sits alone on the right (its back is page 2), then 2|3, 4|5… */
+  /* Spreads like an open binder: page 1 alone on the right, then 2|3, 4|5… */
   .binder { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .binder-page:first-child { grid-column: 2; }
   /* Cap control width; set lists flow into columns (left to right, then down). */

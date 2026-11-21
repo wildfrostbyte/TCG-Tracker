@@ -28,6 +28,7 @@ const SHELL_FILES = [
   'js/views/sheets.js',
   'data/index.json',
   'icons/icon.svg',
+  'icons/card-back.svg',
   'icons/icon-192.png',
   'icons/apple-touch-icon.png',
 ];

@@ -78,9 +78,9 @@ function themePicker() {
   return h('div', { class: 'field' }, h('span', null, 'Appearance (Auto follows your device)'), group);
 }
 
-// ---- Set view: plain grid, or laid out like binder pages ----
+// ---- Set view: grid or binder pages ----
 
-// Common binder page sizes, columns × rows. Order is the same as the picker.
+// Common binder page sizes (cols × rows), in picker order.
 export const BINDER_SIZES = [
   { pockets: 4, cols: 2, rows: 2 },
   { pockets: 9, cols: 3, rows: 3 },
@@ -88,7 +88,7 @@ export const BINDER_SIZES = [
   { pockets: 16, cols: 4, rows: 4 },
 ];
 
-// `pockets` is 0 for the plain grid. onChange(pockets) applies it live behind the sheet.
+// pockets: 0 = grid. onChange applies the choice live.
 export function openViewSheet(set, pockets, onChange) {
   openSheet((close) => {
     const last = BINDER_SIZES.find((b) => b.pockets === state.meta.lastPockets);
@@ -202,23 +202,68 @@ export function openMenu(ctx) {
 
 // ---- Card details ----
 
-export function openCardSheet(ctx, set, card) {
-  const [localId, name, cat, type, rarity, image] = card;
-  const ts = typeStyle(type, cat);
-  const r = rarityInfo(rarity);
-  const number = cardNumber(localId, set.official);
-  let unsubscribe = null;
+// `cards`: what previous / next step through. No stepping if empty or the card isn't in it.
+export function openCardSheet(ctx, set, card, { cards = [] } = {}) {
+  const label = (c) => `${c[1]}, ${cardNumber(c[0], set.official)}, ${set.name}`;
+  let cleanup = null;
 
   openSheet((close) => {
+    let current = card;
+    let index = cards.indexOf(card);
+    const browsing = index >= 0 && cards.length > 1;
+    const root = h('div', { class: 'card-sheet' });
+    const position = h('span', { class: 'muted small card-position', 'aria-live': 'polite' });
+    const pictureSlot = h('div', { class: 'card-picture' });
+    const details = h('div', { class: 'card-details' });
     const counter = h('div', { class: 'card-counter' });
     const friendLine = h('div');
+    const prevBtn = h('button', { type: 'button', class: 'icon-btn card-step', 'aria-label': 'Previous card', onclick: () => step(-1) }, icon('back'));
+    const nextBtn = h('button', { type: 'button', class: 'icon-btn card-step', 'aria-label': 'Next card', onclick: () => step(1) }, icon('next'));
+
+    function step(by) {
+      const next = cards[index + by];
+      if (!next) return;
+      index += by;
+      show(next);
+    }
+
+    // Redraws the parts that change with the card.
+    function show(c) {
+      current = c;
+      const [localId, name, cat, type, rarity, image] = c;
+      const ts = typeStyle(type, cat);
+      const r = rarityInfo(rarity);
+      root.closest('.sheet')?.setAttribute('aria-label', label(c));
+      if (browsing) {
+        position.textContent = `${index + 1} of ${cards.length}`;
+        const focused = document.activeElement;
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === cards.length - 1;
+        // At either end the focused arrow disables; move focus so ← / → keep working.
+        if (focused?.disabled) (focused === prevBtn ? nextBtn : prevBtn).focus();
+        // Preload neighbours' images.
+        for (const n of [cards[index - 1], cards[index + 1]]) if (n?.[5]) new Image().src = `${n[5]}/high.webp`;
+      }
+      pictureSlot.replaceChildren(cardPicture(name, image));
+      details.replaceChildren(
+        h('div', { class: 'card-title' }, h('h2', null, name), h('span', { class: 'card-number' }, cardNumber(localId, set.official))),
+        h('div', { class: 'card-tags' },
+          h('span', { class: 'type-chip', style: { '--type': ts.bg, '--type-fg': ts.fg, '--type-border': ts.border } }, ts.label),
+          r ? h('span', { class: 'rarity-tag' }, rarityPill(r), r.label) : null),
+      );
+      draw();
+    }
 
     function draw() {
+      const [localId, name] = current;
       const n = count(state.mine, set.id, localId);
+      // Redrawing drops focus from − / +; restore it.
+      const focused = counter.contains(document.activeElement) ? document.activeElement.dataset.action : null;
       counter.replaceChildren(
         stepper(localId, n, { big: true, name }),
         h('span', { class: 'muted small' }, n === 0 ? 'Missing' : n === 1 ? 'You have it' : `${plural(n - 1, 'spare')}`),
       );
+      if (focused) (counter.querySelector(`[data-action="${focused}"]:not(:disabled)`) || counter.querySelector('[data-action="inc"]')).focus({ preventScroll: true });
       if (state.friend) {
         const f = count(state.friend, set.id, localId);
         const who = friendName();
@@ -233,32 +278,63 @@ export function openCardSheet(ctx, set, card) {
     counter.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
-      const n = count(state.mine, set.id, localId);
-      setCount(set.id, localId, btn.dataset.action === 'inc' ? n + 1 : n - 1);
+      const n = count(state.mine, set.id, current[0]);
+      setCount(set.id, current[0], btn.dataset.action === 'inc' ? n + 1 : n - 1);
     });
-    unsubscribe = subscribe((ev) => ev.type === 'count' && ev.setId === set.id && ev.localId === localId && draw());
-    draw();
+    const unsubscribeCount = subscribe((ev) => ev.type === 'count' && ev.setId === set.id && ev.localId === current[0] && draw());
+    // ← / → step (not while typing). On document so they work wherever focus is.
+    const onKey = (e) => {
+      if (e.target.matches?.('input, textarea, select') || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'ArrowLeft') step(-1);
+      else if (e.key === 'ArrowRight') step(1);
+    };
+    if (browsing) document.addEventListener('keydown', onKey);
+    cleanup = () => {
+      unsubscribeCount();
+      document.removeEventListener('keydown', onKey);
+    };
 
-    const placeholder = (text) => h('div', { class: 'card-image placeholder' }, icon('image', 28), h('span', null, text));
-    let picture = placeholder('No image available');
-    if (image) {
-      picture = h('img', { class: 'card-image', src: `${image}/high.webp`, alt: `${name} card`, crossorigin: 'anonymous', decoding: 'async' });
-      picture.addEventListener('error', () => picture.replaceWith(placeholder(navigator.onLine ? 'Image unavailable' : 'Image needs a connection')));
+    if (browsing) {
+      // Swipe left: next card. Swipe right: previous.
+      let start = null;
+      pictureSlot.addEventListener('touchstart', (e) => { start = e.touches.length === 1 ? e.touches[0] : null; }, { passive: true });
+      pictureSlot.addEventListener('touchend', (e) => {
+        const end = e.changedTouches[0];
+        if (!start || !end) return;
+        const dx = end.clientX - start.clientX;
+        const dy = end.clientY - start.clientY;
+        start = null;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
+      });
     }
 
-    return h('div', { class: 'card-sheet' },
+    root.append(
       h('div', { class: 'sheet-head' },
         h('span', { class: 'set-chip' }, h('b', null, setAbbr(set.id)), set.name),
+        browsing ? position : null,
         h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close', onclick: () => close() }, icon('close', 20))),
-      picture,
-      h('div', { class: 'card-title' }, h('h2', null, name), h('span', { class: 'card-number' }, number)),
-      h('div', { class: 'card-tags' },
-        h('span', { class: 'type-chip', style: { '--type': ts.bg, '--type-fg': ts.fg, '--type-border': ts.border } }, ts.label),
-        r ? h('span', { class: 'rarity-tag' }, rarityPill(r), r.label) : null),
+      h('div', { class: 'card-stage' }, browsing ? prevBtn : null, pictureSlot, browsing ? nextBtn : null),
+      details,
       counter,
       friendLine,
     );
-  }, { label: `${name}, ${number}, ${set.name}`, onDispose: () => unsubscribe?.() });
+    show(card);
+    return root;
+  }, { label: label(card), onDispose: () => cleanup?.() });
+}
+
+// Card picture; the card back if there's none or it fails. Offline says so, as it may load later.
+function cardPicture(name, image) {
+  const placeholder = (text) => h('div', { class: 'card-image placeholder' }, icon('image', 28), h('span', null, text));
+  const cardBack = () => {
+    const back = h('img', { class: 'card-image', src: 'icons/card-back.svg', alt: `No picture of ${name} yet` });
+    back.addEventListener('error', () => back.replaceWith(placeholder('No image available')), { once: true });
+    return back;
+  };
+  if (!image) return cardBack();
+  const img = h('img', { class: 'card-image', src: `${image}/high.webp`, alt: `${name} card`, crossorigin: 'anonymous', decoding: 'async' });
+  img.addEventListener('error', () => img.replaceWith(navigator.onLine ? cardBack() : placeholder('Image needs a connection')), { once: true });
+  return img;
 }
 
 // ---- Someone opened a share link ----

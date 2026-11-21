@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630 880">
+  <!-- Card back for cards with no picture (63 × 88). Centre mark copies icons/icon.svg; keep in step. -->
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2F4AC0"/>
+      <stop offset="1" stop-color="#16204A"/>
+    </linearGradient>
+    <pattern id="lattice" width="60" height="60" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <path d="M0 0H60M0 0V60" stroke="#FFFFFF" stroke-opacity="0.09" stroke-width="3"/>
+    </pattern>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5C7CFA" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#5C7CFA" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="630" height="880" rx="36" fill="#E9ECF2"/>
+  <rect x="28" y="28" width="574" height="824" rx="22" fill="url(#panel)"/>
+  <rect x="28" y="28" width="574" height="824" rx="22" fill="url(#lattice)"/>
+  <rect x="52" y="52" width="526" height="776" rx="14" fill="none" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="3"/>
+  <circle cx="315" cy="440" r="230" fill="url(#glow)"/>
+  <!-- App mark, 220px square, centred -->
+  <g transform="translate(205 330) scale(0.4296875)">
+    <rect width="512" height="512" rx="112" fill="#3B5BDB" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="10"/>
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(-40 0) translate(256 256) skewX(-10) translate(-256 -256)">
+      <path d="M446 192 L446 171 Q446 150 406 150 L354 150 Q314 150 314 190 L314 322 Q314 362 354 362 L406 362 Q446 362 446 322 L446 302 Q446 262 415 262 L384 262" stroke="#fff" stroke-width="62"/>
+      <path d="M446 192 L446 171 Q446 150 406 150 L354 150 Q314 150 314 190 L314 322 Q314 362 354 362 L406 362 Q446 362 446 322 L446 302 Q446 262 415 262 L384 262" stroke="#3B5BDB" stroke-width="32"/>
+      <path d="M262 192 L262 171 Q262 150 222 150 L186 150 Q146 150 146 190 L146 216 Q146 256 186 256 L222 256 Q262 256 262 296 L262 322 Q262 362 222 362 L186 362 Q146 362 146 341 L146 320" stroke="#3B5BDB" stroke-width="86"/>
+      <path d="M262 192 L262 171 Q262 150 222 150 L186 150 Q146 150 146 190 L146 216 Q146 256 186 256 L222 256 Q262 256 262 296 L262 322 Q262 362 222 362 L186 362 Q146 362 146 341 L146 320" stroke="#fff" stroke-width="62"/>
+    </g>
+  </g>
+</svg>

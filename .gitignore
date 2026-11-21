@@ -1,0 +1,14 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Local design tooling: Claude Code skills/agents/settings, Impeccable sidecar and critiques
+.claude/
+.impeccable/
+
+# Node (only used for scripts/; the app itself has no dependencies)
+node_modules/
+npm-debug.log*

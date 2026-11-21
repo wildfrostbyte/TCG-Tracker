@@ -8,7 +8,7 @@ import { exportBackup, shareCollectionLink, readCollectionFile, parseCollectionT
 import { typeStyle, rarityInfo, cardNumber } from '../rarity.js';
 import { isInstalled, detectPlatform, installGuide, canPromptInstall, promptInstall } from '../install.js';
 import {
-  h, icon, appMark, openSheet, sheetHeader, stepper, rarityPill, avatar, setAbbr, toast, formatDate, plural, tradeStats, DISCLAIMER,
+  h, icon, appMark, openSheet, sheetHeader, stepper, rarityPill, avatar, setAbbr, toast, formatDate, plural, tradeStats, segmented, DISCLAIMER,
 } from '../ui.js';
 
 // ---- Comparing with a friend (used by the menu, share links, file loads and the Trades screen) ----
@@ -69,17 +69,73 @@ function menuRow({ title, detail, onclick, dot, trailing }) {
 
 // Auto / Light / Dark. Applied by js/theme.js (loaded in <head> so there's no flash on start-up).
 function themePicker() {
-  const current = window.SetGapsTheme?.get() || 'auto';
-  const group = h('div', { class: 'segmented', role: 'group', 'aria-label': 'Appearance' },
-    [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([id, label]) =>
-      h('button', { type: 'button', 'data-theme-choice': id, 'aria-pressed': String(current === id) }, label)));
-  group.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-theme-choice]');
-    if (!btn) return;
-    window.SetGapsTheme?.set(btn.dataset.themeChoice);
-    for (const b of group.children) b.setAttribute('aria-pressed', String(b === btn));
+  const group = segmented({
+    label: 'Appearance',
+    options: [{ id: 'auto', label: 'Auto' }, { id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }],
+    current: window.SetGapsTheme?.get() || 'auto',
+    onChange: (id) => window.SetGapsTheme?.set(id),
   });
   return h('div', { class: 'field' }, h('span', null, 'Appearance (Auto follows your device)'), group);
+}
+
+// ---- Set view: plain grid, or laid out like binder pages ----
+
+// Common binder page sizes, columns × rows. Order is the same as the picker.
+export const BINDER_SIZES = [
+  { pockets: 4, cols: 2, rows: 2 },
+  { pockets: 9, cols: 3, rows: 3 },
+  { pockets: 12, cols: 4, rows: 3 },
+  { pockets: 16, cols: 4, rows: 4 },
+];
+
+// `pockets` is 0 for the plain grid. onChange(pockets) applies it live behind the sheet.
+export function openViewSheet(set, pockets, onChange) {
+  openSheet((close) => {
+    const last = BINDER_SIZES.find((b) => b.pockets === state.meta.lastPockets);
+    let size = pockets || last?.pockets || 9;
+    const sizeField = h('div', { class: 'field', hidden: !pockets });
+    const pageNote = h('p', { class: 'muted small' });
+
+    function drawNote() {
+      const pages = Math.ceil(set.cards.length / size);
+      pageNote.textContent = `${plural(set.cards.length, 'card')} fill ${plural(pages, 'page')}: ${plural(Math.ceil(pages / 2), 'double-sided sheet')}.`;
+    }
+
+    sizeField.append(
+      h('span', null, 'Pockets per page'),
+      segmented({
+        label: 'Pockets per page',
+        className: 'tall',
+        options: BINDER_SIZES.map((b) => ({
+          id: b.pockets,
+          label: [h('b', null, String(b.pockets)), h('span', { class: 'small' }, `${b.cols}×${b.rows}`)],
+          ariaLabel: `${b.pockets} pockets, ${b.cols} across by ${b.rows} down`,
+        })),
+        current: size,
+        onChange: (n) => {
+          size = n;
+          drawNote();
+          onChange(n);
+        },
+      }),
+      pageNote,
+    );
+    drawNote();
+
+    return h('div', null,
+      sheetHeader('View', close, 'Lay the set out like your binder pages, in card number order.'),
+      segmented({
+        label: 'Layout',
+        options: [{ id: 'grid', label: 'Grid' }, { id: 'binder', label: 'Binder' }],
+        current: pockets ? 'binder' : 'grid',
+        onChange: (id) => {
+          sizeField.hidden = id !== 'binder';
+          onChange(id === 'binder' ? size : 0);
+        },
+      }),
+      sizeField,
+    );
+  }, { label: 'View' });
 }
 
 export function openMenu(ctx) {

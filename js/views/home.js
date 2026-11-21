@@ -4,7 +4,7 @@ import { state, setStats, changeCount, count, friendName, tradeTotals } from '..
 import { searchCards } from '../api.js';
 import { setIdOf } from '../tcgdex.js';
 import { cardNumber } from '../rarity.js';
-import { h, icon, setRow, avatar, plural, tradeLabels, DISCLAIMER } from '../ui.js';
+import { h, icon, setRow, avatar, plural, tradeLabels, segmented, DISCLAIMER } from '../ui.js';
 import { openMenu } from './sheets.js';
 
 export function renderHome(ctx) {
@@ -18,22 +18,19 @@ export function renderHome(ctx) {
   );
 
   const search = h('input', { type: 'search', placeholder: 'Search sets or cards', 'aria-label': 'Search sets or cards', value: s.q, autocomplete: 'off', enterkeyhint: 'search' });
-  const tabs = h('div', { class: 'segmented', role: 'group', 'aria-label': 'Which sets to show' },
-    [['mine', 'My sets'], ['all', 'All sets']].map(([id, label]) =>
-      h('button', { type: 'button', 'data-tab': id, 'aria-pressed': String(s.tab === id) }, label)),
-  );
+  const tabs = segmented({
+    label: 'Which sets to show',
+    options: [{ id: 'mine', label: 'My sets' }, { id: 'all', label: 'All sets' }],
+    current: s.tab,
+    onChange: (tab) => {
+      s.tab = tab;
+      drawSets();
+    },
+  });
   const controls = h('div', { class: 'controls' }, h('label', { class: 'search' }, icon('search', 18), search), tabs);
 
   const cardsEl = h('section', { class: 'card-results', 'aria-live': 'polite' });
   const listEl = h('div', { class: 'home-list' });
-
-  tabs.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-tab]');
-    if (!btn) return;
-    s.tab = btn.dataset.tab;
-    for (const b of tabs.children) b.setAttribute('aria-pressed', String(b === btn));
-    drawSets();
-  });
 
   let searchTimer = null;
   let searchAbort = null; // the in-flight card search, cancelled when a newer one starts

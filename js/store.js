@@ -66,6 +66,8 @@ const META_DEFAULTS = {
   installDismissals: 0,
   installSnoozeUntil: 0,
   indexRefreshedAt: 0,
+  binders: {}, // { setId: pockets } sets shown as binder pages; missing means the plain grid
+  lastPockets: 0, // the last binder size picked, offered first for the next set
 };
 
 export const state = {

@@ -42,6 +42,7 @@ const ICONS = {
   phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+  binder: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 3v18M4 12h16"/>',
 };
 
 export function icon(name, size) {
@@ -139,6 +140,19 @@ export function chips(items, { label } = {}) {
       'data-filter': item.id,
     }, item.label)),
   );
+}
+
+// Pick one of a few options (Home tabs, Appearance, set view). `label` may be text or nodes.
+export function segmented({ label, options, current, onChange, className }) {
+  const group = h('div', { class: className ? `segmented ${className}` : 'segmented', role: 'group', 'aria-label': label },
+    options.map((o) => h('button', { type: 'button', 'aria-pressed': String(o.id === current), 'aria-label': o.ariaLabel }, o.label)));
+  group.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    for (const b of group.children) b.setAttribute('aria-pressed', String(b === btn));
+    onChange(options[[...group.children].indexOf(btn)].id);
+  });
+  return group;
 }
 
 export function progressBar(have, total, label = 'Collected') {

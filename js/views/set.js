@@ -1,11 +1,11 @@
 // Set view: every card in one grid. − / + changes your count; filters narrow the grid.
 
-import { state, count, subscribe, setCount, friendName, tradeStatus } from '../store.js';
+import { state, count, subscribe, setCount, friendName, tradeStatus, updateMeta } from '../store.js';
 import { getSet } from '../api.js';
 import { rarityInfo, rarityRank, cardNumber } from '../rarity.js';
 import { copyText } from '../share.js';
 import { h, icon, cardTile, chips, progressBar, percent, toast, plural, topBar, tradeLabels } from '../ui.js';
-import { openCardSheet } from './sheets.js';
+import { openCardSheet, openViewSheet, BINDER_SIZES } from './sheets.js';
 
 const FILTERS = ['all', 'have', 'missing', 'dupes', 'get', 'give'];
 
@@ -45,6 +45,7 @@ function build(ctx, view, set, route) {
     filter: FILTERS.includes(route.params.get('f')) ? route.params.get('f') : 'all',
     q: '',
     rarity: '',
+    binder: BINDER_SIZES.find((b) => b.pockets === state.meta.binders?.[set.id]) || null,
   };
   const target = route.params.get('card');
   if (target) s.filter = 'all';
@@ -60,6 +61,7 @@ function build(ctx, view, set, route) {
   const subtitle = extras.length ? `${set.official} cards + ${extras.length} ${secretOnly ? 'secret' : 'extra'}` : plural(set.cards.length, 'card');
 
   const copyBtn = h('button', { type: 'button', class: 'icon-btn', onclick: copyMissing, 'aria-label': 'Copy list of missing cards', title: 'Copy list of missing cards' }, icon('copy', 20));
+  const viewBtn = h('button', { type: 'button', class: 'icon-btn', onclick: () => openViewSheet(set, s.binder?.pockets || 0, setBinder) }, icon('binder', 20));
   const statsText = h('span', { class: 'strong small' });
   const sparesText = h('span', { class: 'muted small' });
   const bar = h('div');
@@ -77,7 +79,7 @@ function build(ctx, view, set, route) {
   const announce = h('p', { class: 'sr-only', 'aria-live': 'polite' });
 
   view.replaceChildren(
-    topBar({ title: set.name, subtitle, action: copyBtn, back: ctx.backLink() }),
+    topBar({ title: set.name, subtitle, action: [viewBtn, copyBtn], back: ctx.backLink() }),
     h('div', { class: 'set-tools' },
       h('div', { class: 'stats-line' }, statsText, sparesText),
       bar,
@@ -190,13 +192,66 @@ function build(ctx, view, set, route) {
 
   function drawGrid() {
     const cards = set.cards.filter(visible);
-    grid.replaceChildren(...cards.map(tile));
+    // classList, not className, so a running celebrate wave isn't cut short.
+    grid.classList.toggle('grid', !s.binder);
+    grid.classList.toggle('binder', !!s.binder);
+    if (s.binder) {
+      // Pages only change with the pocket size; filters and search just re-dim the tiles.
+      if (pagesFor !== s.binder) grid.replaceChildren(...binderPages());
+      pagesFor = s.binder;
+      const shown = new Set(cards.map((c) => c[0]));
+      for (const el of grid.querySelectorAll('.tile')) el.classList.toggle('dim', !shown.has(el.dataset.card));
+    } else {
+      pagesFor = null;
+      grid.replaceChildren(...cards.map(tile));
+    }
+    // Binder pages stay on screen when nothing matches, so the note goes above them.
+    if (s.binder) grid.before(empty);
+    else grid.after(empty);
     empty.hidden = cards.length > 0;
     if (!cards.length) {
       if (s.filter === 'missing' && !s.q && !s.rarity) empty.textContent = 'You have every card in this set!';
       else if (s.q) empty.textContent = `No card matches “${s.q}”${s.filter !== 'all' || s.rarity ? ' with these filters' : ''}. Try the number printed on the card.`;
       else empty.textContent = 'No cards here with these filters. Tap All to see every card.';
     }
+  }
+
+  // Every card keeps its pocket so the pages match the binder: filters dim cards instead of
+  // removing them (drawGrid), and the last page is padded with empty pockets.
+  let pagesFor = null; // the BINDER_SIZES entry the pages in the grid were built for
+  function binderPages() {
+    const { pockets, cols } = s.binder;
+    const pages = [];
+    for (let start = 0; start < set.cards.length; start += pockets) {
+      const cards = set.cards.slice(start, start + pockets);
+      const first = cardNumber(cards[0][0], set.official).split('/')[0];
+      const last = cardNumber(cards[cards.length - 1][0], set.official).split('/')[0];
+      const label = `Page ${pages.length + 1}`;
+      pages.push(h('section', { class: 'binder-page', 'aria-label': label, 'data-cols': cols, style: { '--cols': cols } },
+        h('h2', { class: 'page-label' }, label, h('span', { class: 'muted' }, cards.length > 1 ? `${first}–${last}` : first)),
+        h('div', { class: 'pockets' },
+          cards.map(tile),
+          Array.from({ length: pockets - cards.length }, () => h('div', { class: 'pocket-empty', 'aria-hidden': 'true' }))),
+      ));
+    }
+    return pages;
+  }
+
+  function setBinder(pockets) {
+    s.binder = BINDER_SIZES.find((b) => b.pockets === pockets) || null;
+    const binders = { ...state.meta.binders };
+    if (pockets) binders[set.id] = pockets;
+    else delete binders[set.id];
+    updateMeta(pockets ? { binders, lastPockets: pockets } : { binders });
+    drawViewBtn();
+    drawGrid();
+  }
+
+  function drawViewBtn() {
+    const label = s.binder ? `View: binder, ${s.binder.pockets} pockets per page` : 'View: grid';
+    viewBtn.setAttribute('aria-label', label);
+    viewBtn.title = label;
+    viewBtn.classList.toggle('on', !!s.binder);
   }
 
   function copyMissing() {
@@ -237,8 +292,14 @@ function build(ctx, view, set, route) {
   search.addEventListener('input', () => {
     s.q = search.value.trim();
     drawGrid();
-    // Scrolled deep into a big set, the matches would be off screen above.
-    const top = grid.getBoundingClientRect().top + scrollY - view.querySelector('.top').offsetHeight;
+    // Binder pages keep every card, so bring the first match into view.
+    if (s.binder) {
+      if (!s.q) return;
+      const match = grid.querySelector('.tile:not(.dim)');
+      if (match) return match.scrollIntoView({ block: 'center' });
+    }
+    // Scrolled deep into a big set, the matches (or the binder's "no match" note) would be off screen above.
+    const top = (s.binder ? empty : grid).getBoundingClientRect().top + scrollY - view.querySelector('.top').offsetHeight;
     if (scrollY > top) scrollTo(0, top);
   });
   // Select the last search so the next number replaces it. Deferred: on touch the caret lands after focus.
@@ -251,6 +312,7 @@ function build(ctx, view, set, route) {
     if (old) {
       const focused = old.contains(document.activeElement) ? document.activeElement.dataset.action : null;
       const fresh = tile(byId.get(event.localId));
+      fresh.classList.toggle('dim', old.classList.contains('dim'));
       old.replaceWith(fresh);
       if (focused) {
         const again = fresh.querySelector(`[data-action="${focused}"]:not(:disabled)`) || fresh.querySelector('[data-action="inc"]');
@@ -265,6 +327,7 @@ function build(ctx, view, set, route) {
   });
 
   let reached = milestone();
+  drawViewBtn();
   drawStats();
   drawChips();
   drawGrid();

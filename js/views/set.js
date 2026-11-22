@@ -186,8 +186,8 @@ function build(ctx, view, set, route) {
     }
   }
 
-  function tile(c) {
-    return cardTile({ set, card: c, mine: mine(c[0]), friend: theirs(c[0]), friendName: fname, trade: tradeOf(c[0]) });
+  function tile(c, motion) {
+    return cardTile({ set, card: c, mine: mine(c[0]), friend: theirs(c[0]), friendName: fname, trade: tradeOf(c[0]), motion });
   }
 
   function drawGrid() {
@@ -314,7 +314,9 @@ function build(ctx, view, set, route) {
     const old = grid.querySelector(`[data-card="${CSS.escape(event.localId)}"]`);
     if (old) {
       const focused = old.contains(document.activeElement) ? document.activeElement.dataset.action : null;
-      const fresh = tile(byId.get(event.localId));
+      // A first copy seats the card; any other change to an owned card pops its count.
+      const motion = event.n > 0 ? (old.classList.contains('owned') ? 'bump' : 'seat') : null;
+      const fresh = tile(byId.get(event.localId), motion);
       fresh.classList.toggle('dim', old.classList.contains('dim'));
       old.replaceWith(fresh);
       if (focused) {

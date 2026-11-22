@@ -9,7 +9,7 @@ import { getCardPrices } from '../api.js';
 import { typeStyle, rarityInfo, cardNumber } from '../rarity.js';
 import { isInstalled, detectPlatform, installGuide, canPromptInstall, promptInstall } from '../install.js';
 import {
-  h, icon, appMark, openSheet, sheetHeader, stepper, rarityPill, avatar, setAbbr, toast, formatDate, plural, tradeStats, segmented, DISCLAIMER,
+  h, icon, appMark, openSheet, reducedMotion, sheetHeader, stepper, rarityPill, avatar, setAbbr, toast, formatDate, plural, tradeStats, segmented, DISCLAIMER,
 } from '../ui.js';
 
 // ---- Comparing with a friend (used by the menu, share links, file loads and the Trades screen) ----
@@ -226,12 +226,20 @@ export function openCardSheet(ctx, set, card, { cards = [] } = {}) {
       const next = cards[index + by];
       if (!next) return;
       index += by;
-      show(next);
+      show(next, by);
     }
 
-    // Redraws the parts that change with the card.
-    function show(c) {
+    // Redraws the parts that change with the card. `by`: the step that got here, so the new
+    // picture slides in from that side.
+    let shownN = null;
+    function show(c, by = 0) {
       current = c;
+      shownN = null;
+      pictureSlot.classList.remove('from-next', 'from-prev');
+      if (by) {
+        void pictureSlot.offsetWidth; // restarts the slide when stepping quickly
+        pictureSlot.classList.add(by > 0 ? 'from-next' : 'from-prev');
+      }
       const [localId, name, cat, type, rarity, image] = c;
       const ts = typeStyle(type, cat);
       const r = rarityInfo(rarity);
@@ -262,8 +270,11 @@ export function openCardSheet(ctx, set, card, { cards = [] } = {}) {
       const n = count(state.mine, set.id, localId);
       // Redrawing drops focus from − / +; restore it.
       const focused = counter.contains(document.activeElement) ? document.activeElement.dataset.action : null;
+      // Bump only when this card's count changed, not on first draw or stepping to another card.
+      const bump = shownN != null && shownN !== n;
+      shownN = n;
       counter.replaceChildren(
-        stepper(localId, n, { big: true, name }),
+        stepper(localId, n, { big: true, name, bump }),
         h('span', { class: 'muted small' }, n === 0 ? 'Missing' : n === 1 ? 'You have it' : `${plural(n - 1, 'spare')}`),
       );
       if (focused) (counter.querySelector(`[data-action="${focused}"]:not(:disabled)`) || counter.querySelector('[data-action="inc"]')).focus({ preventScroll: true });
@@ -333,10 +344,12 @@ function cardValue(set, localId) {
   const getBtn = h('button', { type: 'button', class: 'btn', onclick: load }, 'Get value');
   box.append(getBtn);
 
-  // Replaces the box, keeping focus inside it so the sheet doesn't lose its place.
+  // Replaces the box, keeping focus inside it so the sheet doesn't lose its place,
+  // and scrolls it into view: the answer can land below the fold on short screens.
   function settle(focusTarget, ...children) {
     box.replaceChildren(...children);
     focusTarget.focus({ preventScroll: true });
+    reveal(box);
   }
   const note = (text) => h('p', { class: 'muted small center', role: 'status', tabindex: '-1' }, text);
 
@@ -374,7 +387,7 @@ function cardValue(set, localId) {
     let chosen = prints[0];
     let shown = false;
     const result = h('div', { role: 'status' });
-    const showBtn = h('button', { type: 'button', class: 'btn primary', onclick: () => { shown = true; result.replaceChildren(priceView(chosen)); } }, 'Show value');
+    const showBtn = h('button', { type: 'button', class: 'btn primary', onclick: () => { shown = true; result.replaceChildren(priceView(chosen)); reveal(result); } }, 'Show value');
     const picker = segmented({
       label: 'Print',
       className: 'wrap',
@@ -389,6 +402,11 @@ function cardValue(set, localId) {
     settle(picker.querySelector('button'), h('div', { class: 'field' }, h('span', null, 'Which print is yours?'), picker), showBtn, result);
   }
   return box;
+}
+
+// Scrolls just enough to bring el fully into view (no-op if it already is).
+function reveal(el) {
+  requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }));
 }
 
 function priceView(p) {

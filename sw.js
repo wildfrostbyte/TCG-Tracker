@@ -1,7 +1,7 @@
 // SetGaps service worker: works offline and loads instantly.
 // Bump VERSION on each deploy so phones pick up the new files on their next visit.
 
-const VERSION = 'v20';
+const VERSION = 'v22';
 const SHELL = `setgaps-shell-${VERSION}`;
 const IMAGES = 'setgaps-images';
 const API = 'setgaps-api';

@@ -27,6 +27,10 @@ export function h(tag, props, ...children) {
   return el;
 }
 
+// The device asks for less motion. CSS turns every animation off then; JS checks this to skip
+// waiting for one (sheet exit) or to jump rather than glide (scrolling).
+export const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 const svg = (body, size = 22) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 
@@ -91,7 +95,8 @@ export function rarityPill(rarity) {
   return h('span', { class: `rarity ${r.cls.split(' ').map((c) => `r-${c}`).join(' ')}`, title: r.label, 'aria-hidden': 'true' }, r.sym);
 }
 
-export function stepper(localId, n, { big = false, name = '' } = {}) {
+// `bump`: the count just changed, so it pops once to confirm the tap.
+export function stepper(localId, n, { big = false, name = '', bump = false } = {}) {
   // A missing card in the grid gets one wide "+ Add" target instead of a disabled − and a 0.
   if (!big && n === 0) {
     return h('div', { class: 'stepper' },
@@ -99,13 +104,14 @@ export function stepper(localId, n, { big = false, name = '' } = {}) {
   }
   return h('div', { class: big ? 'stepper big' : 'stepper' },
     h('button', { type: 'button', class: 'step', 'data-action': 'dec', 'data-id': localId, 'aria-label': `Remove one ${name}`, disabled: n === 0 }, '−'),
-    h('span', { class: n > 1 ? 'count dupe' : 'count' }, n > 1 ? `×${n}` : String(n)),
+    h('span', { class: `count${n > 1 ? ' dupe' : ''}${bump ? ' bump' : ''}` }, n > 1 ? `×${n}` : String(n)),
     h('button', { type: 'button', class: 'step', 'data-action': 'inc', 'data-id': localId, 'aria-label': `Add one ${name}` }, '+'),
   );
 }
 
 // One card in a set grid. `friend` is null when not comparing.
-export function cardTile({ set, card, mine, friend, friendName, trade }) {
+// `motion` confirms a tap: 'seat' drops a first copy into its slot, 'bump' pops the count.
+export function cardTile({ set, card, mine, friend, friendName, trade, motion = null }) {
   const [localId, name, cat, type, rarity] = card;
   const ts = typeStyle(type, cat);
   const r = rarityInfo(rarity);
@@ -113,9 +119,11 @@ export function cardTile({ set, card, mine, friend, friendName, trade }) {
   const [num, of] = number.includes('/') ? number.split('/') : [number, null];
   const label = `${name}, ${number}, ${ts.label}${r ? `, ${r.label}` : ''}. You have ${mine}${friendName ? `, ${friendName} has ${friend}` : ''}. Show details`;
   return h('div', {
-    class: `tile ${mine > 0 ? 'owned' : 'missing'}${cat === 'T' ? ' trainer' : ''}`,
+    class: `tile ${mine > 0 ? 'owned' : 'missing'}${cat === 'T' ? ' trainer' : ''}${motion === 'seat' ? ' seat' : ''}`,
     'data-card': localId,
     style: { '--type': ts.bg, '--type-fg': ts.fg, '--type-border': ts.border },
+    // Play once. Left on, it would replay when the milestone wave hands the animation back.
+    onanimationend: motion === 'seat' ? (e) => e.animationName === 'seat' && e.currentTarget.classList.remove('seat') : null,
   },
     h('button', { type: 'button', class: 'tile-main', 'data-action': 'open', 'data-id': localId, 'aria-label': label },
       // Type shows only as the tile colour; its name is in the card details sheet and the aria-label.
@@ -127,7 +135,7 @@ export function cardTile({ set, card, mine, friend, friendName, trade }) {
       friendName ? h('span', { class: `tile-friend${trade ? ` ${trade}` : ''}` },
         h('span', { class: 'tile-friend-name' }, friendName), h('span', null, friend > 1 ? `×${friend}` : String(friend))) : null,
     ),
-    stepper(localId, mine, { name }),
+    stepper(localId, mine, { name, bump: motion === 'bump' }),
   );
 }
 
@@ -272,7 +280,19 @@ export function openSheet(build, { label, onClose, onDispose } = {}) {
     closeCurrent = null;
     if (!replacing && !fromHistory) releaseSheetEntry();
     document.removeEventListener('keydown', onKey);
-    root.replaceChildren();
+    // Slides back down, faster than it came up. A replacing sheet takes over at once; a new one
+    // opening meanwhile clears this one from the root anyway.
+    if (replacing || reducedMotion()) root.replaceChildren();
+    else {
+      panel.inert = true;
+      backdrop.classList.add('closing');
+      panel.classList.add('closing');
+      // Gone when its own slide finishes (children's animations bubble here too, so check the
+      // target); the timer covers a browser that never fires animationend.
+      const remove = () => { backdrop.remove(); panel.remove(); };
+      panel.addEventListener('animationend', (e) => e.target === panel && remove());
+      setTimeout(remove, 500);
+    }
     document.body.classList.remove('sheet-open');
     setBackgroundInert(false);
     if (opener && opener.isConnected) opener.focus?.({ preventScroll: true });

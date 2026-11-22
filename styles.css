@@ -27,8 +27,12 @@
   --backdrop: rgba(22, 24, 29, 0.5);
   /* Owned tiles only; missing slots stay flat. */
   --tile-lift: 0 1px 2px rgba(22, 24, 29, 0.12), 0 3px 8px rgba(22, 24, 29, 0.1);
+  /* A card held just above its slot, before it seats onto Tile lift. */
+  --tile-raise: 0 4px 6px rgba(22, 24, 29, 0.16), 0 10px 22px rgba(22, 24, 29, 0.18);
   --radius: 12px;
   --gutter: 16px;
+  /* Expo-out: fast start, gentle landing. Every arrival uses it. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   color-scheme: light;
@@ -65,6 +69,7 @@
   --banner-muted: #C1C7D0;
   --backdrop: rgba(0, 0, 0, 0.6);
   --tile-lift: 0 1px 2px rgba(0, 0, 0, 0.5), 0 3px 10px rgba(0, 0, 0, 0.35);
+  --tile-raise: 0 4px 8px rgba(0, 0, 0, 0.6), 0 12px 26px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
 
@@ -173,6 +178,9 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .btn[aria-disabled="true"] { opacity: 0.6; cursor: progress; }
 .btn.big { min-height: 52px; font-size: 16px; }
 .btn.small-btn { min-height: 36px; padding: 0 12px; font-size: 13px; }
+/* Press: a quick give under the finger, so fast taps while opening packs register. */
+.btn, .step, .chip, .icon-btn, .segmented button { transition: transform 0.1s ease-out; }
+:is(.btn, .step, .chip, .icon-btn, .segmented button):active:not(:disabled):not([aria-disabled="true"]) { transform: scale(0.95); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .actions.stack { flex-direction: column; }
 .actions.row > .btn { flex: 1; }
@@ -436,8 +444,17 @@ body:has(.findbar) #toast { bottom: calc(80px + var(--safe-bottom)); }
   .binder-page[data-cols="4"] .rarity { display: none; }
 }
 
+/* First copy of a card: it drops into its slot, landing on its Tile lift. */
+.tile.seat { animation: seat 0.5s var(--ease-out); }
+@keyframes seat {
+  from { transform: translateY(-4px) scale(1.02); box-shadow: var(--tile-raise); }
+}
+/* Any other count change: the number pops once. */
+.count.bump { animation: bump 0.18s ease-out; }
+@keyframes bump { 40% { transform: scale(1.25); } }
+
 /* Milestone wave across owned tiles. */
-.celebrate .tile.owned { animation: settle 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: calc(var(--i, 0) * 18ms); }
+.celebrate .tile.owned { animation: settle 0.6s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 18ms); }
 .complete-note:not([hidden]) { animation: rise 0.3s ease-out; }
 @keyframes settle { 35% { transform: translateY(-5px); } }
 
@@ -522,6 +539,12 @@ body:has(.findbar) #toast { bottom: calc(80px + var(--safe-bottom)); }
 
 /* ---- Sheets ---- */
 .sheet-backdrop { position: fixed; inset: 0; z-index: 20; background: var(--backdrop); animation: fade 0.2s ease-out; }
+/* Leaving: quicker than arriving. The page behind is usable straight away. */
+.sheet-backdrop.closing { pointer-events: none; animation: fade-out 0.16s ease-in both; }
+.sheet.closing { pointer-events: none; animation: sink 0.16s ease-in both; }
+@keyframes sink { to { transform: translateY(32px); opacity: 0; } }
+/* Its own name: re-running `fade` reversed wouldn't restart it, so the dim would vanish at once. */
+@keyframes fade-out { to { opacity: 0; } }
 .sheet {
   position: fixed;
   left: 0;
@@ -533,14 +556,30 @@ body:has(.findbar) #toast { bottom: calc(80px + var(--safe-bottom)); }
   margin: 0 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 8px 20px calc(24px + var(--safe-bottom));
+  /* Named so the pinned header can bleed over exactly this padding. */
+  --sheet-pad-top: 8px;
+  --sheet-pad-x: 20px;
+  padding: var(--sheet-pad-top) var(--sheet-pad-x) calc(24px + var(--safe-bottom));
   border-radius: 20px 20px 0 0;
   background: var(--surface);
-  animation: rise 0.25s ease-out;
+  animation: rise 0.3s var(--ease-out);
 }
 .sheet > div { display: flex; flex-direction: column; gap: 16px; }
 .sheet-handle { display: block; width: 40px; height: 5px; margin: 0 auto 8px; border-radius: 999px; background: var(--border-strong); }
-.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+/* Pinned to the top of the sheet so Close is always in reach. Bleeds over the sheet's padding
+   (negative margins cancel the extra padding) so content scrolls underneath, not around it. */
+.sheet-head {
+  position: sticky;
+  top: calc(-1 * var(--sheet-pad-top));
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: calc(-1 * var(--sheet-pad-top)) calc(-1 * var(--sheet-pad-x));
+  padding: var(--sheet-pad-top) var(--sheet-pad-x);
+  background: var(--surface);
+}
 .sheet-head > div { display: flex; flex-direction: column; gap: 4px; }
 .sheet-head .icon-btn { margin: -6px -8px 0 0; background: transparent; }
 
@@ -578,7 +617,7 @@ textarea { resize: vertical; width: 100%; }
 .about { font-size: 11px; }
 
 .card-sheet { align-items: center; }
-.card-sheet .sheet-head { width: 100%; align-items: center; }
+.card-sheet .sheet-head { width: calc(100% + 2 * var(--sheet-pad-x)); align-items: center; }
 .set-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); font-size: 13px; font-weight: 600; }
 .set-chip b { padding: 2px 8px; border-radius: 999px; background: var(--dark); color: var(--dark-text); font-size: 11px; letter-spacing: 0.04em; }
 .card-sheet .set-chip { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -588,6 +627,12 @@ textarea { resize: vertical; width: 100%; }
 .card-step { background: transparent; }
 .card-step:disabled { opacity: 0.3; cursor: default; }
 .card-picture { display: flex; touch-action: pan-y; } /* vertical scroll only; sideways is swipe */
+/* Previous / next: the new card slides in from the side you're heading to. Starts half visible so
+   the sheet never blanks; the name and number below swap instantly so they're always readable. */
+.card-picture.from-next, .card-picture.from-prev { animation: slide-in 0.24s var(--ease-out); }
+.card-picture.from-next { --slide-from: 28px; }
+.card-picture.from-prev { --slide-from: -28px; }
+@keyframes slide-in { from { transform: translateX(var(--slide-from)); opacity: 0.5; } }
 .card-stage:has(.card-step) .card-image { width: min(240px, calc(100vw - 150px)); } /* fit both arrows on small phones */
 .card-details { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
 .card-image { width: min(240px, 62vw); aspect-ratio: 63 / 88; border-radius: 12px; object-fit: cover; background: var(--surface-2); }
@@ -606,7 +651,7 @@ textarea { resize: vertical; width: 100%; }
 .card-value { display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 0 auto; }
 .segmented.wrap { flex-wrap: wrap; }
 .segmented.wrap button { flex: 1 1 40%; min-width: 0; }
-.value-result { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px; border-radius: var(--radius); background: var(--surface-2); text-align: center; }
+.value-result { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px; border-radius: var(--radius); background: var(--surface-2); text-align: center; --rise-from: 8px; animation: rise 0.24s var(--ease-out); }
 .value-price { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; outline: none; }
 
 .incoming-head, .install-head { display: flex; align-items: center; gap: 12px; }
@@ -641,7 +686,8 @@ textarea { resize: vertical; width: 100%; }
 }
 #toast.show { opacity: 1; transform: none; }
 
-@keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Rises into place from --rise-from below (24px unless the element sets its own). */
+@keyframes rise { from { transform: translateY(var(--rise-from, 24px)); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 @media (min-width: 700px) {

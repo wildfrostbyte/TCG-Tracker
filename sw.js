@@ -1,11 +1,13 @@
 // SetGaps service worker: works offline and loads instantly.
 // Bump VERSION on each deploy so phones pick up the new files on their next visit.
 
-const VERSION = 'v19';
+const VERSION = 'v20';
 const SHELL = `setgaps-shell-${VERSION}`;
 const IMAGES = 'setgaps-images';
 const API = 'setgaps-api';
+const PRICES = 'setgaps-prices'; // "Get value" lookups; separate so trimming can't drop set data
 const MAX_IMAGES = 400;
+const MAX_PRICES = MAX_IMAGES;
 
 const SHELL_FILES = [
   './',
@@ -65,7 +67,8 @@ self.addEventListener('fetch', (event) => {
   } else if (url.hostname === 'assets.tcgdex.net') {
     event.respondWith(cacheFirst(IMAGES, request));
   } else if (url.hostname === 'api.tcgdex.net') {
-    event.respondWith(networkFirst(API, request));
+    const oneCard = /^\/v2\/[^/]+\/cards\/[^/]+$/.test(url.pathname);
+    event.respondWith(oneCard ? networkFirst(PRICES, request, MAX_PRICES) : networkFirst(API, request));
   }
 });
 
@@ -98,11 +101,14 @@ async function cacheFirst(cacheName, request) {
   return res;
 }
 
-async function networkFirst(cacheName, request) {
+async function networkFirst(cacheName, request, max) {
   const cache = await caches.open(cacheName);
   try {
     const res = await fetch(request);
-    if (res.ok) await cache.put(request, res.clone());
+    if (res.ok) {
+      await cache.put(request, res.clone());
+      if (max) trim(cache, max);
+    }
     return res;
   } catch (err) {
     const cached = await cache.match(request);

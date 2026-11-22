@@ -5,6 +5,7 @@ import {
   friendName, collectionSize, tradeTotals, tradeStatus, changeCount, updateMeta,
 } from '../store.js';
 import { exportBackup, shareCollectionLink, readCollectionFile, parseCollectionText } from '../share.js';
+import { getCardPrices } from '../api.js';
 import { typeStyle, rarityInfo, cardNumber } from '../rarity.js';
 import { isInstalled, detectPlatform, installGuide, canPromptInstall, promptInstall } from '../install.js';
 import {
@@ -216,6 +217,7 @@ export function openCardSheet(ctx, set, card, { cards = [] } = {}) {
     const pictureSlot = h('div', { class: 'card-picture' });
     const details = h('div', { class: 'card-details' });
     const counter = h('div', { class: 'card-counter' });
+    const valueSlot = h('div', { class: 'card-value-slot' });
     const friendLine = h('div');
     const prevBtn = h('button', { type: 'button', class: 'icon-btn card-step', 'aria-label': 'Previous card', onclick: () => step(-1) }, icon('back'));
     const nextBtn = h('button', { type: 'button', class: 'icon-btn card-step', 'aria-label': 'Next card', onclick: () => step(1) }, icon('next'));
@@ -251,6 +253,7 @@ export function openCardSheet(ctx, set, card, { cards = [] } = {}) {
           h('span', { class: 'type-chip', style: { '--type': ts.bg, '--type-fg': ts.fg, '--type-border': ts.border } }, ts.label),
           r ? h('span', { class: 'rarity-tag' }, rarityPill(r), r.label) : null),
       );
+      valueSlot.replaceChildren(cardValue(set, localId));
       draw();
     }
 
@@ -316,11 +319,87 @@ export function openCardSheet(ctx, set, card, { cards = [] } = {}) {
       h('div', { class: 'card-stage' }, browsing ? prevBtn : null, pictureSlot, browsing ? nextBtn : null),
       details,
       counter,
+      valueSlot,
       friendLine,
     );
     show(card);
     return root;
   }, { label: label(card), onDispose: () => cleanup?.() });
+}
+
+// "Get value": fetch this card's prices, pick a print, then "Show value". One print skips the pick.
+function cardValue(set, localId) {
+  const box = h('div', { class: 'card-value' });
+  const getBtn = h('button', { type: 'button', class: 'btn', onclick: load }, 'Get value');
+  box.append(getBtn);
+
+  // Replaces the box, keeping focus inside it so the sheet doesn't lose its place.
+  function settle(focusTarget, ...children) {
+    box.replaceChildren(...children);
+    focusTarget.focus({ preventScroll: true });
+  }
+  const note = (text) => h('p', { class: 'muted small center', role: 'status', tabindex: '-1' }, text);
+
+  // Busy, not disabled: a disabled button would drop focus while it loads.
+  let busy = false;
+  async function load() {
+    if (busy) return;
+    busy = true;
+    getBtn.setAttribute('aria-disabled', 'true');
+    getBtn.textContent = 'Getting value…';
+    let prints;
+    try {
+      prints = await getCardPrices(set.id, localId);
+    } catch (err) {
+      busy = false;
+      getBtn.removeAttribute('aria-disabled');
+      getBtn.textContent = 'Get value';
+      if (!box.isConnected) return;
+      console.error(err);
+      const retry = h('button', { type: 'button', class: 'btn', onclick: () => { settle(getBtn, getBtn); load(); } }, 'Try again');
+      settle(retry, note(navigator.onLine ? 'A value couldn’t be retrieved for this card.' : 'A value couldn’t be retrieved. You’re offline.'), retry);
+      return;
+    }
+    if (!box.isConnected) return; // stepped to another card meanwhile
+    if (!prints.length) {
+      const msg = note('TCGdex doesn’t have a value for this card.');
+      settle(msg, msg);
+      return;
+    }
+    if (prints.length === 1) {
+      const view = priceView(prints[0]);
+      settle(view.querySelector('.value-price'), view);
+      return;
+    }
+    let chosen = prints[0];
+    let shown = false;
+    const result = h('div', { role: 'status' });
+    const showBtn = h('button', { type: 'button', class: 'btn primary', onclick: () => { shown = true; result.replaceChildren(priceView(chosen)); } }, 'Show value');
+    const picker = segmented({
+      label: 'Print',
+      className: 'wrap',
+      options: prints.map((p) => ({ id: p.id, label: p.label })),
+      current: chosen.id,
+      onChange: (id) => {
+        chosen = prints.find((p) => p.id === id);
+        // Once a value is showing, switching print updates it straight away.
+        if (shown) result.replaceChildren(priceView(chosen));
+      },
+    });
+    settle(picker.querySelector('button'), h('div', { class: 'field' }, h('span', null, 'Which print is yours?'), picker), showBtn, result);
+  }
+  return box;
+}
+
+function priceView(p) {
+  const fmt = (v) => new Intl.NumberFormat(undefined, { style: 'currency', currency: p.currency }).format(v);
+  const range = [p.low && `Low ${fmt(p.low)}`, p.mid && `Mid ${fmt(p.mid)}`].filter(Boolean).join(' · ');
+  return h('div', { class: 'value-result' },
+    h('span', { class: 'value-price', tabindex: '-1' }, fmt(p.price)),
+    h('span', { class: 'small' }, `${p.label} · ${p.source}`),
+    range ? h('span', { class: 'muted small' }, range) : null,
+    h('span', { class: 'muted small' }, `Via TCGdex${p.updated ? `, updated ${formatDate(p.updated)}` : ''}`),
+  );
 }
 
 // Card picture; the card back if there's none or it fails. Offline says so, as it may load later.

@@ -116,6 +116,75 @@ export async function searchCards(name, signal) {
   return getJSON(`${API}/${LANG}/cards?name=${encodeURIComponent(name)}`, signal);
 }
 
+// Print labels, in the order the picker lists them.
+const PRINTS = {
+  normal: 'Normal',
+  holofoil: 'Holofoil',
+  'reverse-holofoil': 'Reverse holo',
+  '1st-edition-normal': '1st Edition',
+  '1st-edition-holofoil': '1st Edition holo',
+  'unlimited-normal': 'Unlimited',
+  'unlimited-holofoil': 'Unlimited holo',
+};
+const PRINT_ORDER = Object.keys(PRINTS);
+const printRank = (id) => (PRINT_ORDER.includes(id) ? PRINT_ORDER.indexOf(id) : PRINT_ORDER.length);
+const printLabel = (id) => PRINTS[id] || id.charAt(0).toUpperCase() + id.slice(1).replace(/-/g, ' ');
+// Prices are untrusted input: only positive, finite numbers count.
+const money = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
+const currencyOf = (unit, fallback) => (typeof unit === 'string' && /^[A-Z]{3}$/.test(unit) ? unit : fallback);
+
+// One card's value per print: [{ id, label, price, source, low, mid, currency, updated }].
+// TCGplayer (USD) first, Cardmarket (EUR) if TCGplayer has none. Empty when TCGdex has no price.
+export async function fetchCardPrices(cardId) {
+  const card = await getJSON(`${API}/${LANG}/cards/${encodeURIComponent(cardId)}`);
+  const pricing = card?.pricing || {};
+  const tcg = tcgplayerPrices(pricing.tcgplayer);
+  const prints = tcg.length ? tcg : cardmarketPrices(pricing.cardmarket);
+  return prints.sort((a, b) => printRank(a.id) - printRank(b.id));
+}
+
+// The first usable price, labelled with the field it came from.
+function headline(candidates) {
+  for (const [value, source] of candidates) {
+    const price = money(value);
+    if (price) return { price, source };
+  }
+  return null;
+}
+
+function tcgplayerPrices(tcg) {
+  if (!tcg || typeof tcg !== 'object') return [];
+  const currency = currencyOf(tcg.unit, 'USD');
+  return Object.entries(tcg)
+    .filter(([, p]) => p && typeof p === 'object')
+    .map(([id, p]) => {
+      const top = headline([[p.marketPrice, 'TCGplayer market price'], [p.midPrice, 'TCGplayer mid price']]);
+      return top && {
+        id,
+        label: printLabel(id),
+        ...top,
+        low: money(p.lowPrice),
+        // Mid only beside a market price (else it's the headline). Never highPrice: one absurd listing.
+        mid: money(p.marketPrice) ? money(p.midPrice) : null,
+        currency,
+        updated: tcg.updated || '',
+      };
+    })
+    .filter(Boolean);
+}
+
+// Cardmarket's "-holo" fields are the reverse-holo prices (commons have them too).
+function cardmarketPrices(cm) {
+  if (!cm || typeof cm !== 'object') return [];
+  const currency = currencyOf(cm.unit, 'EUR');
+  return [['normal', ''], ['reverse-holofoil', '-holo']]
+    .map(([id, suffix]) => {
+      const top = headline([[cm[`trend${suffix}`], 'Cardmarket trend price'], [cm[`avg${suffix}`], 'Cardmarket average price']]);
+      return top && { id, label: printLabel(id), ...top, low: money(cm[`low${suffix}`]), mid: null, currency, updated: cm.updated || '' };
+    })
+    .filter(Boolean);
+}
+
 // Set logo URLs to try in order. New sets often have a logo on the asset server before the API
 // lists it, so fall back to the usual path. Some logos exist only as PNG.
 export function setLogoUrls(set) {

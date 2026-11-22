@@ -170,6 +170,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .btn.danger { background: var(--danger); border-color: var(--danger); color: #FFFFFF; }
 .btn.danger-outline { color: var(--danger); }
 .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn[aria-disabled="true"] { opacity: 0.6; cursor: progress; }
 .btn.big { min-height: 52px; font-size: 16px; }
 .btn.small-btn { min-height: 36px; padding: 0 12px; font-size: 13px; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -406,7 +407,7 @@ body:has(.findbar) #toast { bottom: calc(80px + var(--safe-bottom)); }
   background: var(--accent);
   color: var(--accent-text);
 }
-/* Binder view: card-shaped pockets, pages in set order. */
+/* Binder view: the grid's tiles, a little taller, in fixed pages. */
 .binder { display: grid; gap: 16px; padding: 12px var(--gutter); }
 .binder-page {
   width: 100%;
@@ -416,17 +417,17 @@ body:has(.findbar) #toast { bottom: calc(80px + var(--safe-bottom)); }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
-  /* Skip drawing off-screen pages (tiles can't, see below). */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 520px;
 }
 .page-label { display: flex; justify-content: space-between; gap: 8px; margin: 0 2px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.pockets { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 6px; }
-/* The tile's intrinsic-size placeholder would fight the aspect ratio. */
-.pockets .tile { aspect-ratio: 63 / 88; content-visibility: visible; }
-.pockets .tile-main { flex: 1; min-width: 0; }
-.pocket-empty { aspect-ratio: 63 / 88; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
+.pockets { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 8px; }
+.pockets .tile { contain-intrinsic-size: auto 124px; }
+.pockets .tile-main { flex: 1; min-height: 76px; }
+.pocket-empty { min-height: 124px; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
 .tile.dim { opacity: 0.3; }
+/* Phones: the page frame sits in the margins, so pockets are as wide as grid tiles. */
+@media (max-width: 699px) {
+  .binder-page { justify-self: stretch; max-width: none; width: auto; margin: 0 -9px; }
+}
 /* 4 across on phones: smaller numbers, no rarity pill. */
 @media (max-width: 480px) {
   .binder-page[data-cols="4"] .tile-main { padding: 6px; }
@@ -599,6 +600,13 @@ textarea { resize: vertical; width: 100%; }
 .card-counter { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .friend-line { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border-radius: var(--radius); background: var(--get-bg); color: var(--get-text); font-size: 14px; }
 .card-sheet > div:last-child:empty { display: none; }
+/* Get value: button, then print picker + Show value, then the price. */
+.card-value-slot { width: 100%; }
+.card-value { display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 0 auto; }
+.segmented.wrap { flex-wrap: wrap; }
+.segmented.wrap button { flex: 1 1 40%; min-width: 0; }
+.value-result { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px; border-radius: var(--radius); background: var(--surface-2); text-align: center; }
+.value-price { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; outline: none; }
 
 .incoming-head, .install-head { display: flex; align-items: center; gap: 12px; }
 .incoming-head > div, .install-head > div { display: flex; flex-direction: column; gap: 4px; }

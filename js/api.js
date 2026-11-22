@@ -2,12 +2,22 @@
 // Sets fetched from TCGdex are kept in the Cache API so they open instantly and offline next time
 // (the type/rarity query is a POST, which the service worker can't cache on its own).
 
-import { fetchIndex, fetchSet, searchCards as searchRemote } from './tcgdex.js';
+import { fetchIndex, fetchSet, fetchCardPrices, searchCards as searchRemote } from './tcgdex.js';
 import { state, updateMeta } from './store.js';
 
 const DATA_CACHE = 'setgaps-data-v1';
 const DAY = 24 * 60 * 60 * 1000;
 const memory = new Map();
+
+// Shares one in-flight load per key; a failed load is forgotten so the next call retries.
+function once(map, key, load) {
+  if (!map.has(key)) {
+    const loading = load();
+    map.set(key, loading);
+    loading.catch(() => map.delete(key));
+  }
+  return map.get(key);
+}
 
 function cacheKey(name) {
   return new URL(`./__data/${encodeURIComponent(name)}`, location.href).href;
@@ -86,14 +96,9 @@ export function isBundled(setId) {
 }
 
 // Resolves to a set with cards, or rejects if it can't be loaded (e.g. offline and never opened).
-// The in-progress load is shared, so opening a set twice quickly downloads it once.
+// Opening a set twice quickly downloads it once; after a failure, "Try again" really retries.
 export function getSet(setId) {
-  if (!memory.has(setId)) {
-    const loading = loadSet(setId);
-    memory.set(setId, loading);
-    loading.catch(() => memory.delete(setId)); // so "Try again" really tries again
-  }
-  return memory.get(setId);
+  return once(memory, setId, () => loadSet(setId));
 }
 
 async function loadSet(setId) {
@@ -117,6 +122,13 @@ async function loadSet(setId) {
     await cachePut(`set:${setId}`, set);
   }
   return set;
+}
+
+// One card's prices (see fetchCardPrices), fetched once per card per visit. TCGdex updates daily.
+const prices = new Map();
+export function getCardPrices(setId, localId) {
+  const id = `${setId}-${localId}`;
+  return once(prices, id, () => fetchCardPrices(id));
 }
 
 export async function searchCards(query, signal) {

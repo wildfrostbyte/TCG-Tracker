@@ -478,7 +478,8 @@ body:has(.findbar) #toast { bottom: calc(80px + var(--safe-bottom)); }
 .count.dupe { padding: 2px 6px; border-radius: 999px; background: var(--dupe); color: #16181D; }
 .tile.missing .count { color: var(--muted); }
 .stepper.big { gap: 16px; border: 0; background: transparent; }
-.stepper.big .step { flex: 0 0 52px; height: 52px; border: 1px solid var(--border-strong); border-radius: var(--radius); font-size: 24px; }
+/* width too: WebKit sizes the row from width, not flex-basis, and would shift it right. */
+.stepper.big .step { flex: 0 0 52px; width: 52px; height: 52px; border: 1px solid var(--border-strong); border-radius: var(--radius); font-size: 24px; }
 .stepper.big .step[data-action="inc"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .stepper.big .count { min-width: 64px; font-size: 28px; font-weight: 800; }
 .stepper.big .count.dupe { font-size: 22px; }
